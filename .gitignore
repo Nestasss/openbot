@@ -1,0 +1,13 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# node
+node_modules/
+
+# logs
+*.log
+
+# misc
+.DS_Store
