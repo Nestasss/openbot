@@ -1,42 +1,188 @@
-#root {
-  max-width: 1280px;
+:root {
+  --bg: #0b0d12;
+  --panel: #121622;
+  --panel2: #0f1320;
+  --border: rgba(255,255,255,0.08);
+  --text: rgba(255,255,255,0.92);
+  --muted: rgba(255,255,255,0.62);
+  --accent: #2c6bed; /* signal-ish blue */
+  --bubble-me: #2c6bed;
+  --bubble-them: #1b2233;
+  --shadow: 0 10px 30px rgba(0,0,0,0.35);
+
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: radial-gradient(1200px 600px at 30% 0%, rgba(44,107,237,0.20), transparent 60%),
+              radial-gradient(1000px 500px at 100% 40%, rgba(115,66,214,0.14), transparent 55%),
+              var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  background: rgba(18, 22, 34, 0.72);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 6px rgba(44,107,237,0.12);
+}
+
+.title { font-weight: 700; letter-spacing: 0.2px; }
+.subtitle { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+.layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 16px;
+  padding: 16px;
+  max-width: 1200px;
+  width: 100%;
   margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.sidebar {
+  background: rgba(18, 22, 34, 0.8);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.sidebarHeader {
+  padding: 14px 14px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.chatItem {
+  padding: 12px 14px;
+  display: flex;
+  gap: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
 }
 
-.card {
-  padding: 2em;
+.chatItem.active {
+  background: rgba(44,107,237,0.10);
 }
 
-.read-the-docs {
-  color: #888;
+.avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.08);
+  font-weight: 700;
+}
+
+.chatMeta { min-width: 0; }
+.chatName { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chatLast { color: var(--muted); font-size: 12px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.chat {
+  background: rgba(18, 22, 34, 0.8);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.chatHeader {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.chatTitle { font-weight: 650; }
+.chatStatus { color: var(--muted); font-size: 12px; }
+
+.messages {
+  flex: 1;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: auto;
+}
+
+.bubble {
+  max-width: 72%;
+  padding: 10px 12px;
+  border-radius: 16px;
+  line-height: 1.35;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.bubble.them {
+  background: var(--bubble-them);
+  align-self: flex-start;
+}
+
+.bubble.me {
+  background: var(--bubble-me);
+  align-self: flex-end;
+  border-color: rgba(255,255,255,0.10);
+}
+
+.composer {
+  padding: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+}
+
+.composer input {
+  flex: 1;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.10);
+  padding: 10px 12px;
+  background: rgba(0,0,0,0.25);
+  color: var(--text);
+  outline: none;
+}
+
+.composer button {
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+}
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
 }

@@ -1,35 +1,47 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
 import './App.css'
 
-function App() {
-  const [count, setCount] = useState(0)
-
+export default function App() {
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    <div className="app">
+      <header className="topbar">
+        <div className="brand">
+          <div className="dot" />
+          <div>
+            <div className="title">Raka</div>
+            <div className="subtitle">secure-ish messenger (MVP)</div>
+          </div>
+        </div>
+      </header>
+
+      <main className="layout">
+        <aside className="sidebar">
+          <div className="sidebarHeader">Chats</div>
+          <div className="chatItem active">
+            <div className="avatar">S</div>
+            <div className="chatMeta">
+              <div className="chatName">Signal-like UI (soon)</div>
+              <div className="chatLast">Login + 1:1 chat next</div>
+            </div>
+          </div>
+        </aside>
+
+        <section className="chat">
+          <div className="chatHeader">
+            <div className="chatTitle">Welcome</div>
+            <div className="chatStatus">dark theme enabled</div>
+          </div>
+
+          <div className="messages">
+            <div className="bubble them">Скоро будет авторизация по телефону (+7...) и чат 1:1.</div>
+            <div className="bubble me">Ок, делаем.</div>
+          </div>
+
+          <div className="composer">
+            <input placeholder="Message…" disabled />
+            <button disabled>Send</button>
+          </div>
+        </section>
+      </main>
+    </div>
   )
 }
-
-export default App
