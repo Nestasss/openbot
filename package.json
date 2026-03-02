@@ -1,0 +1,9 @@
+{
+  "name": "openbot",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev": "echo 'Use apps/api and apps/web scripts'",
+    "lint": "echo 'TODO'"
+  }
+}
