@@ -1,0 +1,16 @@
+services:
+  tg-3xui-bot:
+    build: .
+    container_name: tg-3xui-bot
+    restart: unless-stopped
+    env_file:
+      - ./bot.env
+    environment:
+      ADMIN_CHAT_ID: "351420199"
+      XUI_DB_PATH: /data/x-ui.db
+      XUI_INBOUND_TAG: vless-ws-10000
+      XUI_PUBLIC_HOST: vpn.securitybots.ru
+      XUI_PUBLIC_PORT: "443"
+      XUI_WS_PATH: /vws
+    volumes:
+      - /root/.openclaw/workspace/docker/vpn/data/x-ui.db:/data/x-ui.db:rw

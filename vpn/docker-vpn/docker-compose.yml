@@ -1,0 +1,15 @@
+services:
+  3x-ui:
+    image: ghcr.io/mhsanaei/3x-ui:latest
+    container_name: 3x-ui
+    restart: unless-stopped
+    ports:
+      # Web panel
+      - "2053:2053"
+      # Common inbound port for clients (we can change later)
+      - "443:443"
+    volumes:
+      - ./data:/etc/x-ui
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      TZ: UTC
