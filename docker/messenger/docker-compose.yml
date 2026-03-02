@@ -1,0 +1,59 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: messenger-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: messenger
+      POSTGRES_USER: messenger
+      POSTGRES_PASSWORD: messenger
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    container_name: messenger-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - ./data/redis:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  api:
+    image: node:22-alpine
+    container_name: messenger-api
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../apps/api:/app
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://messenger:messenger@postgres:5432/messenger
+      REDIS_URL: redis://redis:6379
+    command: ["sh", "-lc", "npm install && npm run dev"]
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  web:
+    image: node:22-alpine
+    container_name: messenger-web
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../../apps/web:/app
+    environment:
+      NODE_ENV: development
+      PORT: 8080
+      VITE_API_URL: https://api.notificbot.ru
+    command: ["sh", "-lc", "npm install && npm run dev -- --host 0.0.0.0 --port 8080"]
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:8080:8080"
