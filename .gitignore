@@ -11,3 +11,12 @@ node_modules/
 
 # misc
 .DS_Store
+
+# build artifacts
+apps/api/dist/
+
+# runtime / user-generated
+apps/api/uploads/
+
+# local docker volumes / state
+docker/messenger/data/
