@@ -73,7 +73,11 @@ export class ChatsService {
             id: true,
             senderId: true,
             text: true,
+            mediaKind: true,
             mediaPath: true,
+            mediaMime: true,
+            mediaSize: true,
+            mediaDurationMs: true,
             createdAt: true,
           },
         },
@@ -118,7 +122,18 @@ export class ChatsService {
     return items;
   }
 
-  async sendMessage(myId: string, chatId: string, data: { text?: string; mediaPath?: string }) {
+  async sendMessage(
+    myId: string,
+    chatId: string,
+    data: {
+      text?: string;
+      mediaKind?: 'photo' | 'voice';
+      mediaPath?: string;
+      mediaMime?: string;
+      mediaSize?: number;
+      mediaDurationMs?: number;
+    },
+  ) {
     if (!data.text && !data.mediaPath) throw new BadRequestException('EMPTY_MESSAGE');
 
     const isMember = await this.prisma.chatParticipant.findUnique({
@@ -132,14 +147,22 @@ export class ChatsService {
         chatId,
         senderId: myId,
         text: data.text,
+        mediaKind: data.mediaKind,
         mediaPath: data.mediaPath,
+        mediaMime: data.mediaMime,
+        mediaSize: data.mediaSize,
+        mediaDurationMs: data.mediaDurationMs,
       },
       select: {
         id: true,
         chatId: true,
         senderId: true,
         text: true,
+        mediaKind: true,
         mediaPath: true,
+        mediaMime: true,
+        mediaSize: true,
+        mediaDurationMs: true,
         createdAt: true,
       },
     });
@@ -186,7 +209,11 @@ export class ChatsService {
         chatId: true,
         senderId: true,
         text: true,
+        mediaKind: true,
         mediaPath: true,
+        mediaMime: true,
+        mediaSize: true,
+        mediaDurationMs: true,
         createdAt: true,
       },
     });

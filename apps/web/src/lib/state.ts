@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Chat, Message, User } from './types';
 import { api, clearToken, setToken } from './api';
 import { connectSocket, disconnectSocket } from './socket';
@@ -133,6 +133,17 @@ export function useChats(me: User | null) {
   const [peerPhone, setPeerPhone] = useState('+7');
   const [composer, setComposer] = useState('');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+
+  // Voice (PWA)
+  const [voiceStatus, setVoiceStatus] = useState<'idle' | 'recording' | 'ready'>('idle');
+  const [voiceBlob, setVoiceBlob] = useState<Blob | null>(null);
+  const [voiceMime, setVoiceMime] = useState<string>('');
+  const [voiceDurationMs, setVoiceDurationMs] = useState<number>(0);
+  const voiceStartedAtRef = useRef<number>(0);
+  const voiceTimerRef = useRef<number | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
   const [wsStatus, setWsStatus] = useState('');
 
   const activeMessages = useMemo(() => {
@@ -188,8 +199,164 @@ export function useChats(me: User | null) {
       body: fd,
     });
     const json = await res.json().catch(() => null);
-    if (json?.ok) return json as { ok: true; mediaPath: string };
+    if (json?.ok) return json as { ok: true; mediaKind: 'photo'; mediaPath: string; mediaMime?: string; mediaSize?: number };
     return null;
+  }
+
+  function pickVoiceMimeType() {
+    const candidates = [
+      // iOS Safari/Chrome often prefer mp4
+      'audio/mp4',
+      'audio/mp4;codecs=mp4a.40.2',
+      // Android/Chrome
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/ogg;codecs=opus',
+    ];
+
+    const MR: any = (window as any).MediaRecorder;
+    if (!MR?.isTypeSupported) return '';
+    return candidates.find((t) => MR.isTypeSupported(t)) || '';
+  }
+
+  async function startVoiceRecording() {
+    if (!activeChatId) return;
+    if (voiceStatus === 'recording') return;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      const mime = pickVoiceMimeType();
+      const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      mediaRecorderRef.current = rec;
+
+      const chunks: BlobPart[] = [];
+      rec.ondataavailable = (e) => {
+        if (e.data && (e.data as any).size > 0) chunks.push(e.data);
+      };
+
+      rec.onstop = () => {
+        const blob = new Blob(chunks, { type: rec.mimeType || mime || 'audio/webm' });
+        setVoiceBlob(blob);
+        setVoiceMime(blob.type || rec.mimeType || mime || '');
+        const dur = Math.min(Date.now() - voiceStartedAtRef.current, 180_000);
+        setVoiceDurationMs(dur);
+        setVoiceStatus('ready');
+
+        // stop tracks
+        try {
+          stream.getTracks().forEach((t) => t.stop());
+        } catch {
+          // ignore
+        }
+        streamRef.current = null;
+        mediaRecorderRef.current = null;
+
+        if (voiceTimerRef.current) {
+          window.clearInterval(voiceTimerRef.current);
+          voiceTimerRef.current = null;
+        }
+      };
+
+      setVoiceBlob(null);
+      setVoiceDurationMs(0);
+      setVoiceMime('');
+      setVoiceStatus('recording');
+      voiceStartedAtRef.current = Date.now();
+
+      // Update duration timer + auto-stop at 180s
+      if (voiceTimerRef.current) window.clearInterval(voiceTimerRef.current);
+      voiceTimerRef.current = window.setInterval(() => {
+        const dur = Date.now() - voiceStartedAtRef.current;
+        setVoiceDurationMs(Math.min(dur, 180_000));
+        if (dur >= 180_000) {
+          stopVoiceRecording();
+        }
+      }, 200);
+
+      rec.start();
+    } catch (e: any) {
+      setVoiceStatus('idle');
+      alert('Не удалось получить доступ к микрофону');
+      console.error(e);
+    }
+  }
+
+  function stopVoiceRecording() {
+    if (voiceStatus !== 'recording') return;
+    const rec = mediaRecorderRef.current;
+    if (rec && rec.state !== 'inactive') {
+      try {
+        rec.stop();
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  async function uploadVoice() {
+    if (!voiceBlob) return null;
+
+    const fd = new FormData();
+    // filename is mostly informational; backend will normalize to m4a anyway
+    const ext = voiceMime.includes('mp4') ? 'm4a' : voiceMime.includes('ogg') ? 'ogg' : 'webm';
+    fd.append('file', voiceBlob, `voice.${ext}`);
+
+    const token = localStorage.getItem('raka_token');
+    const res = await fetch(`${(import.meta as any).env?.VITE_API_URL || 'https://api.notificbot.ru'}/media/voice`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: fd,
+    });
+
+    const json = await res.json().catch(() => null);
+    if (json?.ok) return json as {
+      ok: true;
+      mediaKind: 'voice';
+      mediaPath: string;
+      mediaMime?: string;
+      mediaSize?: number;
+      mediaDurationMs?: number;
+    };
+
+    return null;
+  }
+
+  async function sendVoice() {
+    if (!activeChatId) return;
+    if (voiceStatus !== 'ready' || !voiceBlob) return;
+
+    const up = await uploadVoice();
+    if (!up?.ok) {
+      alert('Не удалось загрузить голосовое');
+      return;
+    }
+
+    // clear locally before send to feel snappy
+    setVoiceStatus('idle');
+    setVoiceBlob(null);
+    setVoiceDurationMs(0);
+    setVoiceMime('');
+
+    const r = await api<any>(`/chats/${activeChatId}/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        mediaKind: 'voice',
+        mediaPath: up.mediaPath,
+        mediaMime: up.mediaMime,
+        mediaSize: up.mediaSize,
+        mediaDurationMs: up.mediaDurationMs,
+      }),
+    });
+
+    if (r?.ok) {
+      setMessages((prev) => ({
+        ...prev,
+        [activeChatId]: [...(prev[activeChatId] || []), r.message],
+      }));
+    }
   }
 
   async function sendMessage() {
@@ -203,6 +370,10 @@ export function useChats(me: User | null) {
     setComposer('');
 
     let mediaPath: string | undefined;
+    let mediaKind: 'photo' | undefined;
+    let mediaMime: string | undefined;
+    let mediaSize: number | undefined;
+
     if (hasPhoto) {
       const up = await uploadPhoto();
       if (!up) {
@@ -210,13 +381,22 @@ export function useChats(me: User | null) {
         return;
       }
       mediaPath = up.mediaPath;
+      mediaKind = 'photo';
+      mediaMime = (up as any).mediaMime;
+      mediaSize = (up as any).mediaSize;
       setPhotoFile(null);
     }
 
     const r = await api<any>(`/chats/${activeChatId}/messages`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text: hasText ? text : undefined, mediaPath }),
+      body: JSON.stringify({
+        text: hasText ? text : undefined,
+        mediaKind,
+        mediaPath,
+        mediaMime,
+        mediaSize,
+      }),
     });
 
     if (r?.ok) {
@@ -273,6 +453,16 @@ export function useChats(me: User | null) {
     photoFile,
     setPhotoFile,
     sendMessage,
+
+    // voice
+    voiceStatus,
+    voiceDurationMs,
+    startVoiceRecording,
+    stopVoiceRecording,
+    sendVoice,
+    setVoiceStatus,
+    setVoiceBlob,
+
     wsStatus,
     loadChats,
   };

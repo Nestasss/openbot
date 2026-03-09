@@ -11,7 +11,12 @@ export const createDirectByPhoneSchema = z.object({
 
 export const sendMessageSchema = z.object({
   text: z.string().trim().max(4000).optional(),
+
+  mediaKind: z.enum(['photo', 'voice']).optional(),
   mediaPath: z.string().trim().max(1024).optional(),
+  mediaMime: z.string().trim().max(128).optional(),
+  mediaSize: z.number().int().positive().max(50 * 1024 * 1024).optional(),
+  mediaDurationMs: z.number().int().positive().max(180_000).optional(),
 });
 
 export type CreateChatDto = z.infer<typeof createChatSchema>;

@@ -49,7 +49,15 @@ model Message {
   chatId    String
   senderId  String
   text      String?
-  mediaPath String?
+
+  // Unified media attachment fields.
+  // mediaKind: e.g. "photo" | "voice"
+  mediaKind       String?
+  mediaPath       String?
+  mediaMime       String?
+  mediaSize       Int?
+  mediaDurationMs Int?
+
   createdAt DateTime @default(now())
 
   chat   Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)

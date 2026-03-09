@@ -226,6 +226,14 @@ export default function App() {
                 </div>
               ) : null}
 
+              {tgDeepLink ? (
+                <div style={{ marginTop: 10, fontSize: 13 }}>
+                  <a href={tgDeepLink} style={{ color: 'rgba(255,255,255,0.85)' }}>
+                    Открыть Telegram
+                  </a>
+                </div>
+              ) : null}
+
 
               {loginMode === 'code' ? (
                 <div style={{ marginTop: 16, textAlign: 'left' }}>
@@ -363,7 +371,15 @@ export default function App() {
                         if (!lm) return ''
                         const isMe = lm.senderId === session.me?.id
                         const text = lm.text?.trim()
-                        const preview = text ? text : lm.mediaPath ? '📎 медиа' : ''
+                        const preview = text
+                          ? text
+                          : lm.mediaKind === 'voice'
+                            ? '🎤 голосовое'
+                            : lm.mediaKind === 'photo'
+                              ? '📷 фото'
+                              : lm.mediaPath
+                                ? '📎 медиа'
+                                : ''
                         return `${isMe ? 'Вы: ' : ''}${preview}`
                       })()}
                     </div>
@@ -450,12 +466,26 @@ export default function App() {
 
                 return (
                   <div key={m.id} className={['bubble', isMe ? 'me' : 'them'].join(' ')}>
-                    {m.mediaPath ? (
+                    {m.mediaPath && (m.mediaKind === 'photo' || !m.mediaKind) ? (
                       <img
                         className="msgImage"
                         src={`https://api.notificbot.ru${m.mediaPath}`}
                         alt="media"
                       />
+                    ) : null}
+
+                    {m.mediaPath && m.mediaKind === 'voice' ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <audio
+                          controls
+                          preload="none"
+                          src={`https://api.notificbot.ru${m.mediaPath}`}
+                          style={{ width: 260, maxWidth: '70vw' }}
+                        />
+                        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)' }}>
+                          {m.mediaDurationMs ? `${Math.round(m.mediaDurationMs / 1000)} сек` : ''}
+                        </div>
+                      </div>
                     ) : null}
 
                     {m.text ? <div style={{ whiteSpace: 'pre-wrap', marginTop: m.mediaPath ? 8 : 0 }}>{m.text}</div> : null}
@@ -501,16 +531,69 @@ export default function App() {
 
               <input
                 className="tgInput"
-                placeholder="Aa"
+                placeholder={
+                  chats.voiceStatus === 'recording'
+                    ? `Запись… ${Math.round((chats.voiceDurationMs || 0) / 1000)}с`
+                    : 'Aa'
+                }
                 value={chats.composer}
                 onChange={(e) => chats.setComposer(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') chats.sendMessage()
                 }}
-                disabled={!chats.activeChatId}
+                disabled={!chats.activeChatId || chats.voiceStatus === 'recording'}
               />
 
-              <button className="sendBtn" onClick={chats.sendMessage} disabled={!chats.activeChatId}>
+              {chats.voiceStatus === 'idle' ? (
+                <button
+                  onClick={chats.startVoiceRecording}
+                  disabled={!chats.activeChatId}
+                  title="Голосовое"
+                  style={{ padding: '10px 12px', borderRadius: 14 }}
+                >
+                  Запись
+                </button>
+              ) : null}
+
+              {chats.voiceStatus === 'recording' ? (
+                <button
+                  onClick={chats.stopVoiceRecording}
+                  disabled={!chats.activeChatId}
+                  style={{ padding: '10px 12px', borderRadius: 14, background: 'rgba(255,59,48,0.18)' }}
+                >
+                  Стоп
+                </button>
+              ) : null}
+
+              {chats.voiceStatus === 'ready' ? (
+                <>
+                  <button
+                    onClick={chats.sendVoice}
+                    disabled={!chats.activeChatId}
+                    style={{ padding: '10px 12px', borderRadius: 14, background: 'rgba(32,224,112,0.14)' }}
+                  >
+                    Отправить
+                  </button>
+                  <button
+                    onClick={() => {
+                      chats.setVoiceStatus('idle')
+                      chats.setVoiceBlob(null)
+                    }}
+                    disabled={!chats.activeChatId}
+                    style={{ padding: '10px 12px', borderRadius: 14 }}
+                    title="Отменить"
+                  >
+                    ✕
+                  </button>
+                </>
+              ) : null}
+
+              <button
+                className="sendBtn"
+                onClick={chats.sendMessage}
+                disabled={!chats.activeChatId || chats.voiceStatus !== 'idle'}
+                title={chats.voiceStatus !== 'idle' ? 'Сначала отправь/отмени голосовое' : 'Отправить'}
+              >
                 ➤
               </button>
             </div>

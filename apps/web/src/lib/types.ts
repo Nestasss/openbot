@@ -17,7 +17,11 @@ export type Chat = {
     id: string;
     senderId: string;
     text?: string | null;
+    mediaKind?: 'photo' | 'voice' | null;
     mediaPath?: string | null;
+    mediaMime?: string | null;
+    mediaSize?: number | null;
+    mediaDurationMs?: number | null;
     createdAt: string;
   } | null;
   myLastReadAt?: string | null;
@@ -30,6 +34,10 @@ export type Message = {
   chatId: string;
   senderId: string;
   text?: string | null;
+  mediaKind?: 'photo' | 'voice' | null;
   mediaPath?: string | null;
+  mediaMime?: string | null;
+  mediaSize?: number | null;
+  mediaDurationMs?: number | null;
   createdAt: string;
 };
