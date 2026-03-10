@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import webpush from 'web-push';
+import * as webpush from 'web-push';
 import { PrismaService } from '../prisma/prisma.service';
 
 function getVapid() {
