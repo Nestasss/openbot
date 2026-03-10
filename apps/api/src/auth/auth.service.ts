@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
-import crypto from 'crypto';
+import * as crypto from 'crypto';
 
 function rand6(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
