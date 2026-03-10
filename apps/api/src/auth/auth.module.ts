@@ -9,7 +9,8 @@ import { JwtAuthGuard } from './jwt.guard';
   imports: [
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'dev-secret-change-me',
-      signOptions: { expiresIn: '1h' },
+      // access token TTL (short). refresh token extends sessions.
+      signOptions: { expiresIn: '15m' },
     }),
   ],
   controllers: [AuthController],

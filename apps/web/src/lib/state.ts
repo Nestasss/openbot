@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Chat, Message, User } from './types';
-import { api, clearToken, setToken } from './api';
+import { api, clearToken, setRefreshToken, setToken } from './api';
 import { connectSocket, disconnectSocket } from './socket';
 import { toast } from './toast';
 
@@ -82,8 +82,9 @@ export function useSession() {
         body: JSON.stringify({ sessionId, code }),
       });
 
-      if (r?.ok && r.accessToken) {
+      if (r?.ok && r.accessToken && r.refreshToken) {
         setToken(r.accessToken);
+        setRefreshToken(r.refreshToken);
         localStorage.removeItem('tg_login_session');
         setTgLoginSessionId('');
         await refreshMe();

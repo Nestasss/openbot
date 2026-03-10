@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
+import crypto from 'crypto';
 
 function rand6(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -14,6 +15,28 @@ export class AuthService {
     private readonly redisService: RedisService,
     private readonly jwt: JwtService,
   ) {}
+
+  private refreshKey(tokenHash: string) {
+    return `rt:${tokenHash}`;
+  }
+
+  private tokenHash(token: string) {
+    return crypto.createHash('sha256').update(token).digest('hex');
+  }
+
+  private async issueTokens(user: { id: string; phone: string }) {
+    const accessToken = await this.jwt.signAsync({ sub: user.id, phone: user.phone });
+
+    // Refresh token: random string stored in Redis (sliding session)
+    const refreshToken = crypto.randomBytes(32).toString('base64url');
+    const h = this.tokenHash(refreshToken);
+
+    const redis = this.redisService.redis;
+    // 3 hours idle window
+    await redis.set(this.refreshKey(h), user.id, 'EX', 3 * 60 * 60);
+
+    return { accessToken, refreshToken };
+  }
 
   private otpKey(phone: string) {
     return `otp:${phone}`;
@@ -109,9 +132,35 @@ export class AuthService {
       select: { id: true, phone: true, createdAt: true },
     });
 
-    const accessToken = await this.jwt.signAsync({ sub: user.id, phone: user.phone });
+    const tokens = await this.issueTokens({ id: user.id, phone: user.phone });
 
-    return { ok: true as const, accessToken, user };
+    return { ok: true as const, ...tokens, user };
+  }
+
+  async refresh(refreshToken: string) {
+    const redis = this.redisService.redis;
+    const h = this.tokenHash(refreshToken);
+    const key = this.refreshKey(h);
+    const userId = await redis.get(key);
+    if (!userId) return { ok: false as const, error: 'INVALID_REFRESH' as const };
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, phone: true } });
+    if (!user) {
+      await redis.del(key);
+      return { ok: false as const, error: 'INVALID_REFRESH' as const };
+    }
+
+    // rotate refresh token (more secure) + sliding expiry
+    await redis.del(key);
+
+    const tokens = await this.issueTokens({ id: user.id, phone: user.phone });
+    return { ok: true as const, ...tokens };
+  }
+
+  async logout(refreshToken: string) {
+    const redis = this.redisService.redis;
+    const h = this.tokenHash(refreshToken);
+    await redis.del(this.refreshKey(h));
   }
 
   private async sendTelegramCode(phone: string, code: string, userChatId: string) {

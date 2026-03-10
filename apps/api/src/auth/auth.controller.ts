@@ -4,6 +4,7 @@ import { AuthService } from './auth.service';
 import { requestTelegramLinkSchema } from './auth.link.dto';
 import { requestCodeSchema, verifyCodeSchema } from './auth.dto';
 import { verifyTelegramLoginSchema } from './auth.tglogin.dto';
+import { refreshSchema } from './auth.refresh.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -64,6 +65,33 @@ export class AuthController {
     try {
       const { sessionId, code } = verifyTelegramLoginSchema.parse(body);
       return await this.auth.verifyTelegramLogin(sessionId, code);
+    } catch (e) {
+      if (e instanceof ZodError) {
+        return { ok: false, error: 'VALIDATION', details: e.flatten() };
+      }
+      throw e;
+    }
+  }
+
+  @Post('refresh')
+  async refresh(@Body() body: unknown) {
+    try {
+      const { refreshToken } = refreshSchema.parse(body);
+      return await this.auth.refresh(refreshToken);
+    } catch (e) {
+      if (e instanceof ZodError) {
+        return { ok: false, error: 'VALIDATION', details: e.flatten() };
+      }
+      throw e;
+    }
+  }
+
+  @Post('logout')
+  async logout(@Body() body: unknown) {
+    try {
+      const { refreshToken } = refreshSchema.parse(body);
+      await this.auth.logout(refreshToken);
+      return { ok: true };
     } catch (e) {
       if (e instanceof ZodError) {
         return { ok: false, error: 'VALIDATION', details: e.flatten() };
