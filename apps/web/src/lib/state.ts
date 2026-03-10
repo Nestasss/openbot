@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Chat, Message, User } from './types';
 import { api, clearToken, setRefreshToken, setToken } from './api';
-import { connectSocket, disconnectSocket } from './socket';
+import { connectSocket, disconnectSocket, emitPresenceActive } from './socket';
 import { toast } from './toast';
 
 export function useSession() {
@@ -600,6 +600,7 @@ export function useChats(me: User | null) {
     }
 
     return () => {
+      emitPresenceActive(null);
       disconnectSocket();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -607,6 +608,8 @@ export function useChats(me: User | null) {
 
   useEffect(() => {
     if (activeChatId) loadMessages(activeChatId);
+    // Tell backend which chat is currently open to suppress redundant push.
+    emitPresenceActive(activeChatId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChatId]);
 

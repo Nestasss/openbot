@@ -3,6 +3,10 @@ import {
   WebSocketServer,
   OnGatewayConnection,
   OnGatewayInit,
+  SubscribeMessage,
+  MessageBody,
+  ConnectedSocket,
+  OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { JwtService } from '@nestjs/jwt';
 import type { Server, Socket } from 'socket.io';
@@ -15,7 +19,7 @@ import { RealtimeService } from './realtime.service';
     credentials: true,
   },
 })
-export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
+export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
 
@@ -60,9 +64,50 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
       });
       for (const p of parts) client.join(`chat:${p.chatId}`);
 
+      // default: not active in any chat
+      this.realtime.setUserActiveChat(userId, null);
+
       client.emit('ready', { ok: true });
     } catch {
       client.disconnect(true);
     }
   }
+
+  handleDisconnect(client: Socket) {
+    const userId = (client.data as any)?.userId as string | undefined;
+    if (userId) this.realtime.clearUser(userId);
+  }
+
+  @SubscribeMessage('presence:active')
+  async presenceActive(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: any,
+  ) {
+    const userId = (client.data as any)?.userId as string | undefined;
+    if (!userId) return;
+
+    const chatId = typeof body?.chatId === 'string' ? body.chatId : null;
+
+    // Only allow marking active for chats the user participates in (basic guard)
+    if (chatId) {
+      const isMember = await this.prisma.chatParticipant.findUnique({
+        where: { chatId_userId: { chatId, userId } },
+        select: { userId: true },
+      });
+      if (!isMember) {
+        this.realtime.setUserActiveChat(userId, null);
+        return;
+      }
+    }
+
+    this.realtime.setUserActiveChat(userId, chatId);
+  }
+
+  @SubscribeMessage('presence:idle')
+  async presenceIdle(@ConnectedSocket() client: Socket) {
+    const userId = (client.data as any)?.userId as string | undefined;
+    if (!userId) return;
+    this.realtime.setUserActiveChat(userId, null);
+  }
 }
+

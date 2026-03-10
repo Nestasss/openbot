@@ -76,6 +76,28 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.me?.id])
 
+  // If app was opened from a push notification: /?chat=<id>
+  useEffect(() => {
+    if (!session.me) return
+    const params = new URLSearchParams(window.location.search)
+    const chatId = params.get('chat')
+    if (!chatId) return
+
+    // wait until chat list loaded
+    const exists = chats.chats.some((c) => c.id === chatId)
+    if (!exists) return
+
+    chats.setActiveChatId(chatId)
+    setMobileView('chat')
+
+    // clean url
+    params.delete('chat')
+    const q = params.toString()
+    const next = q ? `/?${q}` : '/'
+    window.history.replaceState({}, '', next)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.me?.id, chats.chats.length])
+
   // Important: don't auto-jump into a chat on refresh.
   // We switch to chat view only when user taps a chat.
 

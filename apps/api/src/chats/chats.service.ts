@@ -195,6 +195,9 @@ export class ChatsService {
                 ? '📷 Фото'
                 : (msg.text || 'Сообщение');
 
+            // Don't push if user is currently active inside this chat
+            if (this.realtime.isUserActiveInChat(uid, chatId)) return;
+
             await this.push.sendToUser(uid, {
               title,
               body,

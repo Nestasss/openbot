@@ -7,6 +7,16 @@ export function getSocket() {
   return socket;
 }
 
+export function emitPresenceActive(chatId: string | null) {
+  if (!socket) return;
+  try {
+    if (chatId) socket.emit('presence:active', { chatId });
+    else socket.emit('presence:idle');
+  } catch {
+    // ignore
+  }
+}
+
 export function connectSocket(onMessageNew: (msg: any) => void) {
   const token = getToken();
   if (!token) return null;
