@@ -1,6 +1,7 @@
 import './App.css'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useChats, useSession } from './lib/state'
+import VoiceBubble from './components/VoiceBubble'
 
 type Tab = 'chats' | 'settings'
 
@@ -475,17 +476,11 @@ export default function App() {
                     ) : null}
 
                     {m.mediaPath && m.mediaKind === 'voice' ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <audio
-                          controls
-                          preload="none"
-                          src={`https://api.notificbot.ru${m.mediaPath}`}
-                          style={{ width: 260, maxWidth: '70vw' }}
-                        />
-                        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)' }}>
-                          {m.mediaDurationMs ? `${Math.round(m.mediaDurationMs / 1000)} сек` : ''}
-                        </div>
-                      </div>
+                      <VoiceBubble
+                        src={`https://api.notificbot.ru${m.mediaPath}`}
+                        durationMs={m.mediaDurationMs}
+                        isMe={isMe}
+                      />
                     ) : null}
 
                     {m.text ? <div style={{ whiteSpace: 'pre-wrap', marginTop: m.mediaPath ? 8 : 0 }}>{m.text}</div> : null}

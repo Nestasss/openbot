@@ -219,6 +219,80 @@ body {
   align-items: center;
 }
 
+/* Voice bubble */
+.voice{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 240px;
+  max-width: min(360px, 70vw);
+}
+
+.voiceBtn{
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,0.08);
+  background: rgba(255,255,255,0.22);
+  color: rgba(0,0,0,0.86);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bubble.them .voiceBtn{
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.10);
+  color: rgba(255,255,255,0.92);
+}
+
+.voiceBody{ flex: 1; min-width: 0; }
+
+.voiceBar{
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.voiceBarBg{
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.10);
+}
+
+.bubble.them .voiceBarBg{
+  background: rgba(255,255,255,0.14);
+}
+
+.voiceBarFg{
+  position: absolute;
+  inset: 0;
+  width: 0%;
+  background: rgba(0,0,0,0.38);
+}
+
+.bubble.them .voiceBarFg{
+  background: rgba(255,255,255,0.70);
+}
+
+.voiceMeta{
+  margin-top: 6px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: rgba(0,0,0,0.55);
+}
+
+.bubble.them .voiceMeta{
+  color: rgba(255,255,255,0.65);
+}
+
+.voiceErr{
+  color: rgba(255,150,0,0.85);
+}
+
 .bubble.me .msgMeta {
   opacity: 0.85;
 }
@@ -354,7 +428,6 @@ body {
     color: var(--text);
     outline: none;
   }
-}
 
   .layout {
     padding: 0;
