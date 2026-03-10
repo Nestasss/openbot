@@ -9,6 +9,7 @@ import { ChatsModule } from './chats/chats.module';
 import { MediaModule } from './media/media.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { TelegramModule } from './telegram/telegram.module';
+import { PushModule } from './push/push.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { TelegramModule } from './telegram/telegram.module';
     MediaModule,
     RealtimeModule,
     TelegramModule,
+    PushModule,
   ],
   controllers: [AppController],
 })

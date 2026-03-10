@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useChats, useSession } from './lib/state'
 import VoiceBubble from './components/VoiceBubble'
 import ToastHost from './components/ToastHost'
+import { disablePush, ensurePushEnabled, getPushStatus, isProbablyIosStandalone } from './lib/push'
+import { toast } from './lib/toast'
 
 type Tab = 'chats' | 'settings'
 
@@ -17,6 +19,8 @@ export default function App() {
   const [loginMode, setLoginMode] = useState<'link' | 'code'>('link')
   const [loginHint, setLoginHint] = useState<string>('')
   const [tgDeepLink, setTgDeepLink] = useState<string>('')
+  const [pushEnabled, setPushEnabled] = useState<boolean>(false)
+  const [pushLoading, setPushLoading] = useState<boolean>(false)
 
   const activeChat = useMemo(
     () => chats.chats.find((x) => x.id === chats.activeChatId) || null,
@@ -53,6 +57,24 @@ export default function App() {
       clearInterval(t)
     }
   }, [])
+
+  // Push status
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      if (!session.me) {
+        setPushEnabled(false)
+        return
+      }
+      const r = await getPushStatus().catch(() => null)
+      if (!cancelled) setPushEnabled(!!r?.enabled)
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.me?.id])
 
   // Important: don't auto-jump into a chat on refresh.
   // We switch to chat view only when user taps a chat.
@@ -641,7 +663,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   <label className="chatItem" style={{ cursor: 'pointer', flex: 1, border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16 }}>
                     <div className="chatMeta">
                       <div className="chatName">Аватар</div>
@@ -655,7 +677,7 @@ export default function App() {
                         const file = e.target.files?.[0]
                         if (!file) return
                         if (file.size > 3 * 1024 * 1024) {
-                          alert('Файл больше 3MB')
+                          toast('Файл больше 3MB', 'error')
                           return
                         }
 
@@ -670,8 +692,9 @@ export default function App() {
                         const json = await res.json().catch(() => null)
                         if (json?.ok && json.avatarPath) {
                           await session.updateMe({ avatarPath: json.avatarPath })
+                          toast('Аватар обновлён', 'success')
                         } else {
-                          alert('Не удалось загрузить аватар')
+                          toast('Не удалось загрузить аватар', 'error')
                         }
                       }}
                     />
@@ -680,7 +703,7 @@ export default function App() {
                   <div className="chatItem" style={{ flex: 1, border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16 }}>
                     <div className="chatMeta">
                       <div className="chatName">Уведомления</div>
-                      <div className="chatLast">вкл/выкл</div>
+                      <div className="chatLast">вкл/выкл (внутри приложения)</div>
                     </div>
                     <input
                       type="checkbox"
@@ -689,6 +712,35 @@ export default function App() {
                         await session.updateMe({ notificationsEnabled: e.target.checked })
                       }}
                     />
+                  </div>
+
+                  <div className="chatItem" style={{ flex: 1, border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16 }}>
+                    <div className="chatMeta" style={{ flex: 1, minWidth: 0 }}>
+                      <div className="chatName">Push (PWA)</div>
+                      <div className="chatLast">
+                        {pushEnabled ? 'включены' : 'выключены'}
+                        {!isProbablyIosStandalone() ? ' (на iOS нужны "На экран домой")' : ''}
+                      </div>
+                    </div>
+                    <button
+                      disabled={pushLoading}
+                      onClick={async () => {
+                        setPushLoading(true)
+                        try {
+                          if (pushEnabled) {
+                            await disablePush()
+                            setPushEnabled(false)
+                          } else {
+                            const ok = await ensurePushEnabled()
+                            if (ok) setPushEnabled(true)
+                          }
+                        } finally {
+                          setPushLoading(false)
+                        }
+                      }}
+                    >
+                      {pushLoading ? '…' : pushEnabled ? 'Выключить' : 'Включить'}
+                    </button>
                   </div>
                 </div>
 

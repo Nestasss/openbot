@@ -18,8 +18,9 @@ model User {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
-  chats     ChatParticipant[]
-  messages  Message[]
+  chats              ChatParticipant[]
+  messages           Message[]
+  pushSubscriptions  PushSubscription[]
 }
 
 model Chat {
@@ -65,4 +66,18 @@ model Message {
 
   @@index([chatId, createdAt])
   @@index([senderId])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

@@ -1,12 +1,14 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { RealtimeService } from '../realtime/realtime.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushService } from '../push/push.service';
 
 @Injectable()
 export class ChatsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly realtime: RealtimeService,
+    private readonly push: PushService,
   ) {}
 
   async createDirectChat(myId: string, peerUserId: string) {
@@ -172,6 +174,38 @@ export class ChatsService {
 
     // realtime fanout
     this.realtime.emitNewMessage(chatId, msg);
+
+    // push notifications (best-effort)
+    void (async () => {
+      try {
+        const parts = await this.prisma.chatParticipant.findMany({
+          where: { chatId },
+          select: { userId: true },
+        });
+        const recipients = parts.map((p) => p.userId).filter((id) => id !== myId);
+        await Promise.all(
+          recipients.map(async (uid) => {
+            const u = await this.prisma.user.findUnique({ where: { id: uid }, select: { notificationsEnabled: true } });
+            if (u?.notificationsEnabled === false) return;
+
+            const title = 'Raka';
+            const body = msg.mediaKind === 'voice'
+              ? '🎤 Голосовое сообщение'
+              : msg.mediaKind === 'photo'
+                ? '📷 Фото'
+                : (msg.text || 'Сообщение');
+
+            await this.push.sendToUser(uid, {
+              title,
+              body,
+              data: { chatId, messageId: msg.id },
+            });
+          }),
+        );
+      } catch {
+        // ignore
+      }
+    })();
 
     return msg;
   }
