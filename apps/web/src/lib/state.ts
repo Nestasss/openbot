@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Chat, Message, User } from './types';
 import { api, clearToken, setToken } from './api';
 import { connectSocket, disconnectSocket } from './socket';
+import { toast } from './toast';
 
 export function useSession() {
   const [me, setMe] = useState<User | null>(null);
@@ -183,7 +184,12 @@ export function useChats(me: User | null) {
       await loadMessages(r.chat.id);
       setPeerPhone('+7');
     } else {
-      alert(r?.error === 'PEER_NOT_FOUND' ? 'Пользователь ещё не логинился. Пусть сначала войдёт.' : `Error: ${r?.error}`);
+      toast(
+        r?.error === 'PEER_NOT_FOUND'
+          ? 'Пользователь ещё не логинился. Пусть сначала войдёт.'
+          : `Ошибка: ${r?.error || 'CREATE_CHAT_FAILED'}`,
+        'error',
+      );
     }
   }
 
@@ -206,6 +212,13 @@ export function useChats(me: User | null) {
 
   const VOICE_MAX_MS = 180_000;
   const VOICE_MAX_BYTES = 20 * 1024 * 1024; // client-side guard (server may enforce differently)
+
+  function formatMmSs(ms: number) {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    const mm = String(Math.floor(s / 60)).padStart(1, '0');
+    const ss = String(s % 60).padStart(2, '0');
+    return `${mm}:${ss}`;
+  }
 
   function stopVoiceTracks() {
     try {
@@ -254,13 +267,18 @@ export function useChats(me: User | null) {
     if (voiceStatus === 'recording') return;
     if (voiceBusy) return;
 
+    // if user already has a draft voice, starting recording means "re-record"
+    if (voiceStatus === 'ready') {
+      cancelVoice();
+    }
+
     // Capability checks
     if (!navigator.mediaDevices?.getUserMedia) {
-      alert('Этот браузер не поддерживает запись микрофона.');
+      toast('Этот браузер не поддерживает запись микрофона.', 'error');
       return;
     }
     if (!(window as any).MediaRecorder) {
-      alert('MediaRecorder не поддерживается в этом браузере. Попробуй обновить iOS/браузер.');
+      toast('MediaRecorder не поддерживается в этом браузере. Попробуй обновить iOS/браузер.', 'error');
       return;
     }
 
@@ -279,7 +297,7 @@ export function useChats(me: User | null) {
 
       rec.onerror = (ev: any) => {
         console.error('MediaRecorder error', ev);
-        alert('Ошибка записи голосового.');
+        toast('Ошибка записи голосового.', 'error');
         try {
           rec.stop();
         } catch {
@@ -305,7 +323,7 @@ export function useChats(me: User | null) {
           setVoiceBlob(null);
           setVoiceDurationMs(0);
           setVoiceMime('');
-          alert('Голосовое не записалось (пустой файл). Попробуй ещё раз.');
+          toast('Голосовое не записалось (пустой файл). Попробуй ещё раз.', 'error');
           return;
         }
 
@@ -314,7 +332,7 @@ export function useChats(me: User | null) {
           setVoiceBlob(null);
           setVoiceDurationMs(0);
           setVoiceMime('');
-          alert('Голосовое слишком большое. Попробуй записать короче.');
+          toast('Голосовое слишком большое. Попробуй записать короче.', 'error');
           return;
         }
 
@@ -345,7 +363,7 @@ export function useChats(me: User | null) {
           try {
             stopVoiceRecording();
           } finally {
-            alert('Лимит голосового — 3 минуты. Запись остановлена.');
+            toast(`Лимит голосового — 3 минуты. Запись остановлена (${formatMmSs(VOICE_MAX_MS)}).`, 'info');
           }
         }
       }, 200);
@@ -361,7 +379,7 @@ export function useChats(me: User | null) {
       stopVoiceTracks();
 
       setVoiceStatus('idle');
-      alert(explainMicError(e));
+      toast(explainMicError(e), 'error');
       console.error(e);
     }
   }
@@ -450,7 +468,7 @@ export function useChats(me: User | null) {
       const up = await uploadVoice();
 
       if (!up) {
-        alert('Не удалось загрузить голосовое (нет файла)');
+        toast('Не удалось загрузить голосовое (нет файла)', 'error');
         return;
       }
 
@@ -463,7 +481,7 @@ export function useChats(me: User | null) {
               : up.error === 'UNAUTHORIZED'
                 ? 'Сессия истекла. Перезайди в аккаунт.'
                 : 'Не удалось загрузить голосовое.';
-        alert(msg);
+        toast(msg, 'error');
         return;
       }
 
@@ -491,7 +509,7 @@ export function useChats(me: User | null) {
           [activeChatId]: [...(prev[activeChatId] || []), r.message],
         }));
       } else {
-        alert(`Не удалось отправить сообщение: ${r?.error || 'SEND_FAILED'}`);
+        toast(`Не удалось отправить сообщение: ${r?.error || 'SEND_FAILED'}`, 'error');
       }
     } finally {
       setVoiceBusy(false);
@@ -516,7 +534,7 @@ export function useChats(me: User | null) {
     if (hasPhoto) {
       const up = await uploadPhoto();
       if (!up) {
-        alert('Не удалось загрузить фото')
+        toast('Не удалось загрузить фото', 'error')
         return;
       }
       mediaPath = up.mediaPath;

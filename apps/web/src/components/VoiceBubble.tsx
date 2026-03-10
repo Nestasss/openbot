@@ -126,7 +126,21 @@ export default function VoiceBubble({
       </button>
 
       <div className="voiceBody">
-        <div className="voiceBar">
+        <div
+          className="voiceBar"
+          onClick={(e) => {
+            const a = audioRef.current
+            if (!a) return
+            const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
+            const x = (e.clientX - rect.left) / rect.width
+            const t = clamp(x, 0, 1) * (effectiveTotalMs / 1000)
+            if (Number.isFinite(t) && effectiveTotalMs > 0) {
+              a.currentTime = t
+              setCurrentMs(t * 1000)
+            }
+          }}
+          title="Перемотка"
+        >
           <div className="voiceBarBg" />
           <div className="voiceBarFg" style={{ width: `${Math.round(progress * 100)}%` }} />
         </div>

@@ -2,6 +2,7 @@ import './App.css'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useChats, useSession } from './lib/state'
 import VoiceBubble from './components/VoiceBubble'
+import ToastHost from './components/ToastHost'
 
 type Tab = 'chats' | 'settings'
 
@@ -76,6 +77,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <ToastHost />
       {!session.me ? (
         <div style={{ position: 'fixed', top: 14, right: 14, zIndex: 50 }}>
           <div
@@ -524,29 +526,41 @@ export default function App() {
                 />
               </label>
 
-              <input
-                className="tgInput"
-                placeholder={
-                  chats.voiceStatus === 'recording'
-                    ? `Запись… ${Math.round((chats.voiceDurationMs || 0) / 1000)}с`
-                    : 'Aa'
-                }
-                value={chats.composer}
-                onChange={(e) => chats.setComposer(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') chats.sendMessage()
-                }}
-                disabled={!chats.activeChatId || chats.voiceStatus === 'recording'}
-              />
+              <div className="composerMid">
+                {chats.voiceStatus === 'recording' ? (
+                  <div className="recBadge" title="Идёт запись">
+                    <span className="recDot" />
+                    <span className="recText">
+                      Запись {(() => {
+                        const s = Math.max(0, Math.floor((chats.voiceDurationMs || 0) / 1000))
+                        const mm = String(Math.floor(s / 60)).padStart(1, '0')
+                        const ss = String(s % 60).padStart(2, '0')
+                        return `${mm}:${ss}`
+                      })()}
+                    </span>
+                  </div>
+                ) : null}
+
+                <input
+                  className="tgInput"
+                  placeholder={chats.voiceStatus === 'ready' ? 'Голосовое готово — отправь или удали' : 'Aa'}
+                  value={chats.composer}
+                  onChange={(e) => chats.setComposer(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') chats.sendMessage()
+                  }}
+                  disabled={!chats.activeChatId || chats.voiceStatus !== 'idle'}
+                />
+              </div>
 
               {chats.voiceStatus === 'idle' ? (
                 <button
                   onClick={chats.startVoiceRecording}
                   disabled={!chats.activeChatId}
-                  title="Голосовое"
+                  title="Запись голосового"
                   style={{ padding: '10px 12px', borderRadius: 14 }}
                 >
-                  Запись
+                  🎙️
                 </button>
               ) : null}
 
@@ -555,8 +569,9 @@ export default function App() {
                   onClick={chats.stopVoiceRecording}
                   disabled={!chats.activeChatId}
                   style={{ padding: '10px 12px', borderRadius: 14, background: 'rgba(255,59,48,0.18)' }}
+                  title="Остановить"
                 >
-                  Стоп
+                  ⏹
                 </button>
               ) : null}
 
@@ -566,8 +581,17 @@ export default function App() {
                     onClick={chats.sendVoice}
                     disabled={!chats.activeChatId || chats.voiceBusy}
                     style={{ padding: '10px 12px', borderRadius: 14, background: 'rgba(32,224,112,0.14)' }}
+                    title="Отправить голосовое"
                   >
-                    {chats.voiceBusy ? 'Отправка…' : 'Отправить'}
+                    {chats.voiceBusy ? 'Отправка…' : '⬆️'}
+                  </button>
+                  <button
+                    onClick={chats.startVoiceRecording}
+                    disabled={!chats.activeChatId || chats.voiceBusy}
+                    style={{ padding: '10px 12px', borderRadius: 14 }}
+                    title="Перезаписать"
+                  >
+                    ↺
                   </button>
                   <button
                     onClick={chats.cancelVoice}
@@ -575,7 +599,7 @@ export default function App() {
                     style={{ padding: '10px 12px', borderRadius: 14 }}
                     title="Удалить"
                   >
-                    ✕
+                    🗑
                   </button>
                 </>
               ) : null}
