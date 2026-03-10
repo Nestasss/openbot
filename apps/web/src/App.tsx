@@ -569,19 +569,16 @@ export default function App() {
                 <>
                   <button
                     onClick={chats.sendVoice}
-                    disabled={!chats.activeChatId}
+                    disabled={!chats.activeChatId || chats.voiceBusy}
                     style={{ padding: '10px 12px', borderRadius: 14, background: 'rgba(32,224,112,0.14)' }}
                   >
-                    Отправить
+                    {chats.voiceBusy ? 'Отправка…' : 'Отправить'}
                   </button>
                   <button
-                    onClick={() => {
-                      chats.setVoiceStatus('idle')
-                      chats.setVoiceBlob(null)
-                    }}
-                    disabled={!chats.activeChatId}
+                    onClick={chats.cancelVoice}
+                    disabled={!chats.activeChatId || chats.voiceBusy}
                     style={{ padding: '10px 12px', borderRadius: 14 }}
-                    title="Отменить"
+                    title="Удалить"
                   >
                     ✕
                   </button>

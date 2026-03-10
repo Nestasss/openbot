@@ -139,6 +139,7 @@ export function useChats(me: User | null) {
   const [voiceBlob, setVoiceBlob] = useState<Blob | null>(null);
   const [voiceMime, setVoiceMime] = useState<string>('');
   const [voiceDurationMs, setVoiceDurationMs] = useState<number>(0);
+  const [voiceBusy, setVoiceBusy] = useState<boolean>(false); // upload/send lock
   const voiceStartedAtRef = useRef<number>(0);
   const voiceTimerRef = useRef<number | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -203,6 +204,18 @@ export function useChats(me: User | null) {
     return null;
   }
 
+  const VOICE_MAX_MS = 180_000;
+  const VOICE_MAX_BYTES = 20 * 1024 * 1024; // client-side guard (server may enforce differently)
+
+  function stopVoiceTracks() {
+    try {
+      streamRef.current?.getTracks()?.forEach((t) => t.stop());
+    } catch {
+      // ignore
+    }
+    streamRef.current = null;
+  }
+
   function pickVoiceMimeType() {
     const candidates = [
       // iOS Safari/Chrome often prefer mp4
@@ -219,9 +232,37 @@ export function useChats(me: User | null) {
     return candidates.find((t) => MR.isTypeSupported(t)) || '';
   }
 
+  function explainMicError(e: any) {
+    const name = e?.name || '';
+    if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+      return 'Нет доступа к микрофону. Разреши микрофон для сайта в настройках браузера/сайта и попробуй снова.';
+    }
+    if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+      return 'Микрофон не найден. Подключи микрофон и попробуй снова.';
+    }
+    if (name === 'NotReadableError') {
+      return 'Не удалось открыть микрофон (он занят другим приложением?). Закрой другие приложения, которые используют микрофон.';
+    }
+    if (name === 'SecurityError') {
+      return 'Запись микрофона доступна только по HTTPS.';
+    }
+    return 'Не удалось получить доступ к микрофону.';
+  }
+
   async function startVoiceRecording() {
     if (!activeChatId) return;
     if (voiceStatus === 'recording') return;
+    if (voiceBusy) return;
+
+    // Capability checks
+    if (!navigator.mediaDevices?.getUserMedia) {
+      alert('Этот браузер не поддерживает запись микрофона.');
+      return;
+    }
+    if (!(window as any).MediaRecorder) {
+      alert('MediaRecorder не поддерживается в этом браузере. Попробуй обновить iOS/браузер.');
+      return;
+    }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -236,26 +277,55 @@ export function useChats(me: User | null) {
         if (e.data && (e.data as any).size > 0) chunks.push(e.data);
       };
 
-      rec.onstop = () => {
-        const blob = new Blob(chunks, { type: rec.mimeType || mime || 'audio/webm' });
-        setVoiceBlob(blob);
-        setVoiceMime(blob.type || rec.mimeType || mime || '');
-        const dur = Math.min(Date.now() - voiceStartedAtRef.current, 180_000);
-        setVoiceDurationMs(dur);
-        setVoiceStatus('ready');
-
-        // stop tracks
+      rec.onerror = (ev: any) => {
+        console.error('MediaRecorder error', ev);
+        alert('Ошибка записи голосового.');
         try {
-          stream.getTracks().forEach((t) => t.stop());
+          rec.stop();
         } catch {
           // ignore
         }
-        streamRef.current = null;
-        mediaRecorderRef.current = null;
+      };
 
+      rec.onstop = () => {
+        const blob = new Blob(chunks, { type: rec.mimeType || mime || 'audio/webm' });
+
+        // cleanup timers/streams
         if (voiceTimerRef.current) {
           window.clearInterval(voiceTimerRef.current);
           voiceTimerRef.current = null;
+        }
+        mediaRecorderRef.current = null;
+        stopVoiceTracks();
+
+        const dur = Math.min(Date.now() - voiceStartedAtRef.current, VOICE_MAX_MS);
+
+        if (!blob || (blob as any).size === 0) {
+          setVoiceStatus('idle');
+          setVoiceBlob(null);
+          setVoiceDurationMs(0);
+          setVoiceMime('');
+          alert('Голосовое не записалось (пустой файл). Попробуй ещё раз.');
+          return;
+        }
+
+        if ((blob as any).size > VOICE_MAX_BYTES) {
+          setVoiceStatus('idle');
+          setVoiceBlob(null);
+          setVoiceDurationMs(0);
+          setVoiceMime('');
+          alert('Голосовое слишком большое. Попробуй записать короче.');
+          return;
+        }
+
+        setVoiceBlob(blob);
+        setVoiceMime(blob.type || rec.mimeType || mime || '');
+        setVoiceDurationMs(dur);
+        setVoiceStatus('ready');
+
+        if (dur >= VOICE_MAX_MS) {
+          // Inform about limit (we auto-stopped at max duration)
+          console.log('Voice: reached max duration');
         }
       };
 
@@ -265,20 +335,33 @@ export function useChats(me: User | null) {
       setVoiceStatus('recording');
       voiceStartedAtRef.current = Date.now();
 
-      // Update duration timer + auto-stop at 180s
+      // Update duration timer + auto-stop at max duration
       if (voiceTimerRef.current) window.clearInterval(voiceTimerRef.current);
       voiceTimerRef.current = window.setInterval(() => {
         const dur = Date.now() - voiceStartedAtRef.current;
-        setVoiceDurationMs(Math.min(dur, 180_000));
-        if (dur >= 180_000) {
-          stopVoiceRecording();
+        setVoiceDurationMs(Math.min(dur, VOICE_MAX_MS));
+        if (dur >= VOICE_MAX_MS) {
+          // stop & hint
+          try {
+            stopVoiceRecording();
+          } finally {
+            alert('Лимит голосового — 3 минуты. Запись остановлена.');
+          }
         }
       }, 200);
 
       rec.start();
     } catch (e: any) {
+      // full cleanup
+      if (voiceTimerRef.current) {
+        window.clearInterval(voiceTimerRef.current);
+        voiceTimerRef.current = null;
+      }
+      mediaRecorderRef.current = null;
+      stopVoiceTracks();
+
       setVoiceStatus('idle');
-      alert('Не удалось получить доступ к микрофону');
+      alert(explainMicError(e));
       console.error(e);
     }
   }
@@ -295,8 +378,45 @@ export function useChats(me: User | null) {
     }
   }
 
-  async function uploadVoice() {
+  function cancelVoice() {
+    // Cancel / delete current voice draft (and stop recording if active)
+    try {
+      if (voiceStatus === 'recording') stopVoiceRecording();
+    } catch {
+      // ignore
+    }
+
+    if (voiceTimerRef.current) {
+      window.clearInterval(voiceTimerRef.current);
+      voiceTimerRef.current = null;
+    }
+    mediaRecorderRef.current = null;
+    stopVoiceTracks();
+
+    setVoiceStatus('idle');
+    setVoiceBlob(null);
+    setVoiceDurationMs(0);
+    setVoiceMime('');
+    setVoiceBusy(false);
+  }
+
+  async function uploadVoice(): Promise<
+    | null
+    | {
+        ok: true;
+        mediaKind: 'voice';
+        mediaPath: string;
+        mediaMime?: string;
+        mediaSize?: number;
+        mediaDurationMs?: number;
+      }
+    | { ok: false; error: string }
+  > {
     if (!voiceBlob) return null;
+
+    if ((voiceBlob as any).size > VOICE_MAX_BYTES) {
+      return { ok: false, error: 'VOICE_TOO_BIG' };
+    }
 
     const fd = new FormData();
     // filename is mostly informational; backend will normalize to m4a anyway
@@ -311,51 +431,70 @@ export function useChats(me: User | null) {
     });
 
     const json = await res.json().catch(() => null);
-    if (json?.ok) return json as {
-      ok: true;
-      mediaKind: 'voice';
-      mediaPath: string;
-      mediaMime?: string;
-      mediaSize?: number;
-      mediaDurationMs?: number;
-    };
+    if (json?.ok) {
+      return json as any;
+    }
 
-    return null;
+    // Standardize error shape
+    const err = json?.error || (res.status === 413 ? 'PAYLOAD_TOO_LARGE' : 'UPLOAD_FAILED');
+    return { ok: false, error: err };
   }
 
   async function sendVoice() {
     if (!activeChatId) return;
     if (voiceStatus !== 'ready' || !voiceBlob) return;
+    if (voiceBusy) return;
 
-    const up = await uploadVoice();
-    if (!up?.ok) {
-      alert('Не удалось загрузить голосовое');
-      return;
-    }
+    setVoiceBusy(true);
+    try {
+      const up = await uploadVoice();
 
-    // clear locally before send to feel snappy
-    setVoiceStatus('idle');
-    setVoiceBlob(null);
-    setVoiceDurationMs(0);
-    setVoiceMime('');
+      if (!up) {
+        alert('Не удалось загрузить голосовое (нет файла)');
+        return;
+      }
 
-    const r = await api<any>(`/chats/${activeChatId}/messages`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        mediaKind: 'voice',
-        mediaPath: up.mediaPath,
-        mediaMime: up.mediaMime,
-        mediaSize: up.mediaSize,
-        mediaDurationMs: up.mediaDurationMs,
-      }),
-    });
+      if (!up.ok) {
+        const msg =
+          up.error === 'VOICE_TOO_LONG'
+            ? 'Голосовое слишком длинное (лимит 3 минуты).'
+            : up.error === 'PAYLOAD_TOO_LARGE' || up.error === 'VOICE_TOO_BIG'
+              ? 'Голосовое слишком большое. Попробуй записать короче.'
+              : up.error === 'UNAUTHORIZED'
+                ? 'Сессия истекла. Перезайди в аккаунт.'
+                : 'Не удалось загрузить голосовое.';
+        alert(msg);
+        return;
+      }
 
-    if (r?.ok) {
-      setMessages((prev) => ({
-        ...prev,
-        [activeChatId]: [...(prev[activeChatId] || []), r.message],
-      }));
+      // clear locally before send to feel snappy
+      setVoiceStatus('idle');
+      setVoiceBlob(null);
+      setVoiceDurationMs(0);
+      setVoiceMime('');
+
+      const r = await api<any>(`/chats/${activeChatId}/messages`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          mediaKind: 'voice',
+          mediaPath: up.mediaPath,
+          mediaMime: up.mediaMime,
+          mediaSize: up.mediaSize,
+          mediaDurationMs: up.mediaDurationMs,
+        }),
+      });
+
+      if (r?.ok) {
+        setMessages((prev) => ({
+          ...prev,
+          [activeChatId]: [...(prev[activeChatId] || []), r.message],
+        }));
+      } else {
+        alert(`Не удалось отправить сообщение: ${r?.error || 'SEND_FAILED'}`);
+      }
+    } finally {
+      setVoiceBusy(false);
     }
   }
 
@@ -416,6 +555,18 @@ export function useChats(me: User | null) {
     });
   }
 
+  // Cleanup voice recording if hook unmounts / user logs out
+  useEffect(() => {
+    return () => {
+      try {
+        cancelVoice();
+      } catch {
+        // ignore
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (!me) return;
     loadChats();
@@ -457,9 +608,11 @@ export function useChats(me: User | null) {
     // voice
     voiceStatus,
     voiceDurationMs,
+    voiceBusy,
     startVoiceRecording,
     stopVoiceRecording,
     sendVoice,
+    cancelVoice,
     setVoiceStatus,
     setVoiceBlob,
 
